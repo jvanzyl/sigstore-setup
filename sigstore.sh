@@ -7,6 +7,8 @@
 # - connect to kind network?
 
 version="0.2.9"
+knativeVersion="1.1.0"
+
 arch="$(uname -m)"
 os="$(uname)"
 
@@ -18,7 +20,16 @@ cd ${target}
 echo ">>> Retrieving version ${version} of setup-kind.sh ..."
 curl -Lo setup-kind.sh https://github.com/sigstore/scaffolding/releases/download/v${version}/setup-kind.sh
 chmod u+x setup-kind.sh
-./setup-kind.sh
+./setup-kind.sh \
+  --knative-version ${knativeVersion}
+
+# This is what's in the GitHub Action
+#
+#./setup-kind.sh \
+#  --registry-url ${{ inputs.registry-name }}:${{ inputs.registry-port }} \
+#  --cluster-suffix ${{ inputs.cluster-suffix }} \
+#  --k8s-version ${{ inputs.k8s-version }} \
+#  --knative-version ${{ inputs.knative-version }}
 
 docker rm -f `docker ps -a | grep 'registry:2' | awk -F " " '{print $1}'`
 echo ">>> Installing Sigstore scaffolding ..."
