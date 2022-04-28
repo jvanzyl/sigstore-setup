@@ -17,6 +17,8 @@ rm -rf ${target} 2> /dev/null
 mkdir -p ${target} 2> /dev/null
 cd ${target}
 
+docker rm -f `docker ps -a | grep 'registry:2' | awk -F " " '{print $1}'`
+
 echo ">>> Retrieving version ${version} of setup-kind.sh ..."
 curl -Lo setup-kind.sh https://github.com/sigstore/scaffolding/releases/download/v${version}/setup-kind.sh
 chmod u+x setup-kind.sh
@@ -31,7 +33,6 @@ chmod u+x setup-kind.sh
 #  --k8s-version ${{ inputs.k8s-version }} \
 #  --knative-version ${{ inputs.knative-version }}
 
-docker rm -f `docker ps -a | grep 'registry:2' | awk -F " " '{print $1}'`
 echo ">>> Installing Sigstore scaffolding ..."
 curl -Lo release.yaml https://github.com/sigstore/scaffolding/releases/download/v${version}/release.yaml
 kubectl apply -f release.yaml
