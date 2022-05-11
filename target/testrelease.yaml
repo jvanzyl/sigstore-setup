@@ -1,0 +1,128 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: checktree
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: checktree
+          image: ghcr.io/sigstore/scaffolding/checktree@sha256:34ef7ff1946df3ad1d803f8c448af41d7a95abcc6a90f5a883294b1aaa7d6c0b
+
+---
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: gettoken
+spec:
+  template:
+    spec:
+      containers:
+        - name: gettoken
+          image: ghcr.io/sigstore/scaffolding/getoidctoken@sha256:457b9be969012c89bfaeb9d2c1f69e1ae48d3158e1217b44dcc3b1570692d3c8
+          env:
+            - name: OIDC_FILE
+              value: "/var/run/sigstore/cosign/oidc-token"
+          volumeMounts:
+            - name: oidc-info
+              mountPath: /var/run/sigstore/cosign
+      volumes:
+        - name: oidc-info
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: oidc-token
+                  expirationSeconds: 600
+                  audience: sigstore
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sign-job
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: cosign
+          # Built from ci on 2022-03-15
+          image: gcr.io/projectsigstore/cosign/ci/cosign@sha256:8f7f1a0e7cef67c352f00acd14791d977faa8d1cd47a69f9c880a5185c44ffbb
+          args: ["sign", "--fulcio-url", "http://fulcio.fulcio-system.svc", "--rekor-url", "http://rekor.rekor-system.svc", "--force", "ghcr.io/sigstore/scaffolding/checktree@sha256:34ef7ff1946df3ad1d803f8c448af41d7a95abcc6a90f5a883294b1aaa7d6c0b"]
+          env:
+            - name: COSIGN_EXPERIMENTAL
+              value: "true"
+            - name: SIGSTORE_CT_LOG_PUBLIC_KEY_FILE
+              value: "/var/run/sigstore-root/rootfile.pem"
+            - name: COSIGN_REPOSITORY
+              value: "registry.local:5000/knative"
+          volumeMounts:
+            - name: oidc-info
+              mountPath: /var/run/sigstore/cosign
+            - name: keys
+              mountPath: "/var/run/sigstore-root"
+              readOnly: true
+      volumes:
+        - name: oidc-info
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: oidc-token
+                  expirationSeconds: 600 # Use as short-lived as possible.
+                  audience: sigstore
+        - name: keys
+          secret:
+            secretName: ctlog-public-key
+            items:
+              - key: public
+                path: rootfile.pem
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verify-job
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: cosign
+          # Built from ci on 2022-03-15
+          image: gcr.io/projectsigstore/cosign/ci/cosign@sha256:8f7f1a0e7cef67c352f00acd14791d977faa8d1cd47a69f9c880a5185c44ffbb
+          args: ["verify", "--rekor-url", "http://rekor.rekor-system.svc", "--allow-insecure-registry", "ghcr.io/sigstore/scaffolding/checktree@sha256:34ef7ff1946df3ad1d803f8c448af41d7a95abcc6a90f5a883294b1aaa7d6c0b"]
+          env:
+            # Trust the Rekor public key that is fetched from it.
+            - name: SIGSTORE_TRUST_REKOR_API_PUBLIC_KEY
+              value: "true"
+            - name: COSIGN_EXPERIMENTAL
+              value: "true"
+            - name: SIGSTORE_ROOT_FILE
+              value: "/var/run/sigstore-fulcio/fulcio-public.pem"
+            - name: COSIGN_REPOSITORY
+              value: "registry.local:5000/knative"
+          volumeMounts:
+            - name: oidc-info
+              mountPath: /var/run/sigstore/cosign
+            - name: keys
+              mountPath: "/var/run/sigstore-fulcio"
+              readOnly: true
+      volumes:
+        - name: oidc-info
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: oidc-token
+                  expirationSeconds: 600 # Use as short-lived as possible.
+                  audience: sigstore
+        - name: keys
+          secret:
+            secretName: fulcio-secret
+            items:
+              - key: cert
+                path: fulcio-public.pem
+
+---

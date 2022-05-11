@@ -1,0 +1,4 @@
+127.0.0.1 rekor.sigstore.local
+127.0.0.1 fulcio.sigstore.local
+127.0.0.1 ctlog.sigstore.local
+127.0.0.1 gettoken.sigstore.local

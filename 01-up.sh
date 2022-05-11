@@ -5,10 +5,18 @@
 # - check for docker registry and re-use?
 # - kind for m1 macs? works in emulation mode as rosetta is installed by default now
 # - connect to kind network?
+# - https://faun.pub/create-a-private-local-docker-registry-5c79ce912620
 
+basedir="$(pwd)"
+localSetupScript="${basedir}/../sigstore-scaffolding/hack/setup-kind.sh"
+
+# Defaults present in the GitHub Action
 version="0.2.9"
 knativeVersion="1.1.0"
+clusterSuffix="cluster.local"
+k8sVersion="v1.22.x"
 
+# OS and arch
 arch="$(uname -m)"
 os="$(uname)"
 
@@ -17,10 +25,14 @@ rm -rf ${target} 2> /dev/null
 mkdir -p ${target} 2> /dev/null
 cd ${target}
 
-docker rm -f `docker ps -a | grep 'registry:2' | awk -F " " '{print $1}'`
-
-echo ">>> Retrieving version ${version} of setup-kind.sh ..."
-curl -Lo setup-kind.sh https://github.com/sigstore/scaffolding/releases/download/v${version}/setup-kind.sh
+if [ -f ${localSetupScript} ]; then
+  echo "Using local setup script ${localSetupScript}"
+  cp ${localSetupScript} .
+else
+  echo ">>> Retrieving version ${version} of setup-kind.sh ..."
+  curl -Lo setup-kind.sh https://github.com/sigstore/scaffolding/releases/download/v${version}/setup-kind.sh
+fi
+ 
 chmod u+x setup-kind.sh
 ./setup-kind.sh \
   --knative-version ${knativeVersion}
